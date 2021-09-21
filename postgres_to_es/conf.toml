@@ -1,0 +1,10 @@
+[database]
+host = '0.0.0.0'
+port = 5432
+user = 'postgres'
+password = 'password'
+dbname = 'movies'
+
+[elastic]
+host = '0.0.0.0'
+port = 9200
