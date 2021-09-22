@@ -1,41 +1,33 @@
-from datetime import datetime, timedelta
-
 import psycopg2
 from psycopg2.extras import DictCursor
 import backoff
 
-from processes import MoviesProcess
+from processes import MovieProcess
+from checkers import GenreChecker
 from loader import config
 from state import JsonFileStorage, State
 
 
 class Processor:
 
-    def __init__(self, state: State, limit: int = 100):
-        self.state = state
-        self.limit = limit
-        self.offset = 0
+    def __init__(self, connection, checkers, processes):
+        self.connection = connection
+        self.checkers = checkers
+        self.process = processes
 
-    @backoff.on_exception(backoff.expo, psycopg2.OperationalError)
     def start(self):
-        date = datetime.now() - timedelta(days=365 * 100)
-        movie_process = MoviesProcess()
-
-        pg_conn = psycopg2.connect(**config.database.dict(), cursor_factory=DictCursor)
-        extracted = movie_process.extract(pg_conn, date, self.limit, self.offset)
-
-        while len(extracted):
-            transformed = movie_process.transform(extracted)
-            movie_process.load(transformed)
-            self.offset += self.limit
-            extracted = movie_process.extract(pg_conn, date, self.limit, self.offset)
-
-        self.offset = 0
-        pg_conn.close()
+        for checker in self.checkers:
+            while genre_id := checker.check():
+                for movie_id in checker.get_movie(genre_id):
+                    extracted = self.process.extract(self.connection, movie_id)
+                    transformed = self.process.transform(extracted)
+                    self.process.load(transformed)
 
 
 if __name__ == '__main__':
-    storage = JsonFileStorage('states.json')
+    pg_conn = psycopg2.connect(**config.database.dict(), cursor_factory=DictCursor)
+    storage = JsonFileStorage('state.json')
     state = State(storage)
-    processor = Processor(state, limit=100)
+    processor = Processor(pg_conn, (GenreChecker(pg_conn, state), ), MovieProcess())
     processor.start()
+    pg_conn.close()
