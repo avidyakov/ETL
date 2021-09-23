@@ -1,11 +1,11 @@
-import psycopg2
-from psycopg2.extras import DictCursor
 import backoff
+import psycopg2
 from loguru import logger
+from psycopg2.extras import DictCursor
 
-from processes import MovieProcess
-from checkers import GenreChecker, PersonChecker, MovieChecker
+from checkers import GenreChecker, MovieChecker, PersonChecker
 from loader import config
+from processes import MovieProcess
 from state import JsonFileStorage, State
 
 
@@ -18,6 +18,7 @@ class Processor:
     def __init__(self, checkers, processes):
         self.checkers = checkers
         self.process = processes
+        self._recently_updated = set()
 
     @backoff.on_exception(backoff.expo, (
             psycopg2.OperationalError,
@@ -28,11 +29,12 @@ class Processor:
         logger.info('The processor is running')
         with psycopg2.connect(**config.database.dict(), cursor_factory=DictCursor) as pg_conn:
             for checker in self.checkers:
-                while genre_id := checker.check(pg_conn):
-                    for movie_id in checker.get_movie(pg_conn, genre_id):
+                for movie_id in checker.get_updated_objects(pg_conn):
+                    if movie_id not in self._recently_updated:
                         extracted = self.process.extract(pg_conn, movie_id)
                         transformed = self.process.transform(extracted)
                         self.process.load(transformed)
+                        self._recently_updated.add(movie_id)
 
         pg_conn.close()
         logger.info('The processor is stopped')

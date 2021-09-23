@@ -29,7 +29,12 @@ class GenreChecker(Checker):
     unprocessed_from_name = 'genre_unprocessed_from'
     offset_state_name = 'genre_offset'
 
-    def get_movie(self, connection, genre_id):
+    def get_updated_objects(self, connection):
+        while genre_id := self.check(connection):
+            for movie_id in self.get_movie_id(connection, genre_id):
+                yield movie_id
+
+    def get_movie_id(self, connection, genre_id):
         with connection.cursor() as cursor:
             cursor.execute(
                 'SELECT movie.id FROM content.movies as movie '
@@ -72,6 +77,11 @@ class GenreChecker(Checker):
 class PersonChecker(Checker):
     unprocessed_from_name = 'person_unprocessed_from'
     offset_state_name = 'person_offset'
+
+    def get_updated_objects(self, connection):
+        while person_id := self.check(connection):
+            for movie_id in self.get_movie(connection, person_id):
+                yield movie_id
 
     def get_movie(self, connection, person_id):
         with connection.cursor() as cursor:
@@ -117,8 +127,9 @@ class MovieChecker(Checker):
     unprocessed_from_name = 'movie_unprocessed_from'
     offset_state_name = 'movie_offset'
 
-    def get_movie(self, connection, movie_id):
-        yield movie_id
+    def get_updated_objects(self, connection):
+        while movie_id := self.check(connection):
+            yield movie_id
 
     def check(self, connection):
         with connection.cursor() as cursor:

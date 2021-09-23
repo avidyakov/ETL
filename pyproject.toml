@@ -2,7 +2,7 @@
 name = "postgres_to_elastic"
 version = "0.1.0"
 description = ""
-authors = ["Your Name <you@example.com>"]
+authors = ["Alex Vidyakov alex.vidyakov@yandex.ru"]
 
 [tool.poetry.dependencies]
 python = "3.9.6"
@@ -15,6 +15,8 @@ backoff = "^1.11.1"
 python-dateutil = "^2.8.2"
 
 [tool.poetry.dev-dependencies]
+isort = "^5.9.3"
+pylint = "^2.11.1"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

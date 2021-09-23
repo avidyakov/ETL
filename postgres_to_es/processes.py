@@ -1,8 +1,8 @@
-from typing import List
-import requests
 import json
+from typing import List
 
 import backoff
+import requests
 from loguru import logger
 
 from errors import TransformError
