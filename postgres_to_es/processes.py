@@ -1,15 +1,23 @@
 from typing import List
-
 import requests
 import json
 
 import backoff
+from loguru import logger
 
 from errors import TransformError
 
 
+def on_backoff(details: dict) -> None:
+    logger.error(f'Backing off {details["wait"]:0.1f} seconds after {details["tries"]} tries')
+
+
 class BaseProcess:
-    @backoff.on_exception(backoff.expo, requests.exceptions.ConnectionError)
+    @backoff.on_exception(
+        backoff.expo,
+        requests.exceptions.ConnectionError,
+        on_backoff=on_backoff
+    )
     def load(self, transformed_data) -> None:
         data = '\n'.join([json.dumps(item) for item in transformed_data]) + '\n'
         headers = {'Content-Type': 'application/x-ndjson'}

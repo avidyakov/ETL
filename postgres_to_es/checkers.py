@@ -7,8 +7,7 @@ class Checker:
     unprocessed_from_name = 'unprocessed_from_name'
     offset_state_name = 'offset_state_name'
 
-    def __init__(self, connection, state):
-        self.connection = connection
+    def __init__(self, state):
         self.state = state
         self.unprocessed_from = self._restore_unprocessed_from()
         self.offset = self._restore_offset()
@@ -30,8 +29,8 @@ class GenreChecker(Checker):
     unprocessed_from_name = 'genre_unprocessed_from'
     offset_state_name = 'genre_offset'
 
-    def get_movie(self, genre_id):
-        with self.connection.cursor() as cursor:
+    def get_movie(self, connection, genre_id):
+        with connection.cursor() as cursor:
             cursor.execute(
                 'SELECT movie.id FROM content.movies as movie '
                 'LEFT JOIN content.genres_movies gm on movie.id = gm.movie_id '
@@ -42,8 +41,8 @@ class GenreChecker(Checker):
             while row := cursor.fetchone():
                 yield row['id']
 
-    def check(self):
-        with self.connection.cursor() as cursor:
+    def check(self, connection):
+        with connection.cursor() as cursor:
             cursor.execute(
                 'SELECT genre.id, genre.updated_at FROM content.genres genre '
                 'WHERE updated_at > %s ORDER BY updated_at OFFSET %s;',
@@ -74,8 +73,8 @@ class PersonChecker(Checker):
     unprocessed_from_name = 'person_unprocessed_from'
     offset_state_name = 'person_offset'
 
-    def get_movie(self, person_id):
-        with self.connection.cursor() as cursor:
+    def get_movie(self, connection, person_id):
+        with connection.cursor() as cursor:
             cursor.execute(
                 'SELECT movie.id FROM content.movies as movie '
                 'LEFT JOIN content.persons_movies pm on movie.id = pm.movie_id '
@@ -86,8 +85,8 @@ class PersonChecker(Checker):
             while row := cursor.fetchone():
                 yield row['id']
 
-    def check(self):
-        with self.connection.cursor() as cursor:
+    def check(self, connection):
+        with connection.cursor() as cursor:
             cursor.execute(
                 'SELECT person.id, person.updated_at FROM content.persons person '
                 'WHERE updated_at > %s ORDER BY updated_at OFFSET %s;',
@@ -118,11 +117,11 @@ class MovieChecker(Checker):
     unprocessed_from_name = 'movie_unprocessed_from'
     offset_state_name = 'movie_offset'
 
-    def get_movie(self, movie_id):
+    def get_movie(self, connection, movie_id):
         yield movie_id
 
-    def check(self):
-        with self.connection.cursor() as cursor:
+    def check(self, connection):
+        with connection.cursor() as cursor:
             cursor.execute(
                 'SELECT movie.id, movie.updated_at FROM content.movies movie '
                 'WHERE updated_at > %s ORDER BY updated_at OFFSET %s;',

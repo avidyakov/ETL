@@ -1,6 +1,5 @@
 import toml
 from pydantic import BaseModel
-from loguru import logger
 
 
 class Database(BaseModel):
