@@ -58,6 +58,9 @@ WHERE movie.id IN (%s);""", (movie_id, ))
         director = ''
         for person in persons:
             role = person['part']
+            if role is None:
+                break
+
             if role == 'a':
                 actors.append({'id': person['id'], 'name': person['name']})
                 actors_names += person['name']

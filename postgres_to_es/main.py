@@ -3,7 +3,7 @@ from psycopg2.extras import DictCursor
 import backoff
 
 from processes import MovieProcess
-from checkers import GenreChecker
+from checkers import GenreChecker, PersonChecker, MovieChecker
 from loader import config
 from state import JsonFileStorage, State
 
@@ -28,6 +28,11 @@ if __name__ == '__main__':
     pg_conn = psycopg2.connect(**config.database.dict(), cursor_factory=DictCursor)
     storage = JsonFileStorage('state.json')
     state = State(storage)
-    processor = Processor(pg_conn, (GenreChecker(pg_conn, state), ), MovieProcess())
+    checkers = (
+        GenreChecker(pg_conn, state),
+        PersonChecker(pg_conn, state),
+        MovieChecker(pg_conn, state),
+    )
+    processor = Processor(pg_conn, checkers, MovieProcess())
     processor.start()
     pg_conn.close()

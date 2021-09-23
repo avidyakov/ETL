@@ -71,12 +71,79 @@ class GenreChecker(Checker):
 
 
 class PersonChecker(Checker):
+    unprocessed_from_name = 'person_unprocessed_from'
+    offset_state_name = 'person_offset'
+
+    def get_movie(self, person_id):
+        with self.connection.cursor() as cursor:
+            cursor.execute(
+                'SELECT movie.id FROM content.movies as movie '
+                'LEFT JOIN content.persons_movies pm on movie.id = pm.movie_id '
+                'WHERE pm.person_id IN (%s);',
+                (person_id, )
+            )
+
+            while row := cursor.fetchone():
+                yield row['id']
 
     def check(self):
-        pass
+        with self.connection.cursor() as cursor:
+            cursor.execute(
+                'SELECT person.id, person.updated_at FROM content.persons person '
+                'WHERE updated_at > %s ORDER BY updated_at OFFSET %s;',
+                (self.unprocessed_from, self.offset)
+            )
+            query_result = cursor.fetchone()
+            if query_result is not None:
+                person_updated_at, person_id = query_result['updated_at'], query_result['id']
+                cursor.execute(
+                    'SELECT person.id FROM content.persons person '
+                    'WHERE updated_at > %s ORDER BY updated_at OFFSET %s;',
+                    (self.unprocessed_from, self.offset)
+                )
+                if len(cursor.fetchall()) > 1:
+                    self.offset += 1
+                    self.state.set_state(self.offset_state_name, self.offset)
+                else:
+                    self.offset = 0
+                    self.state.set_state(self.offset_state_name, self.offset)
+
+                    self.unprocessed_from = person_updated_at
+                    self.state.set_state(self.unprocessed_from_name, str(self.unprocessed_from))
+
+                return person_id
 
 
 class MovieChecker(Checker):
+    unprocessed_from_name = 'movie_unprocessed_from'
+    offset_state_name = 'movie_offset'
+
+    def get_movie(self, movie_id):
+        yield movie_id
 
     def check(self):
-        pass
+        with self.connection.cursor() as cursor:
+            cursor.execute(
+                'SELECT movie.id, movie.updated_at FROM content.movies movie '
+                'WHERE updated_at > %s ORDER BY updated_at OFFSET %s;',
+                (self.unprocessed_from, self.offset)
+            )
+            query_result = cursor.fetchone()
+            if query_result is not None:
+                movie_updated_at, movie_id = query_result['updated_at'], query_result['id']
+                cursor.execute(
+                    'SELECT movie.id FROM content.movies movie '
+                    'WHERE updated_at > %s ORDER BY updated_at OFFSET %s;',
+                    (self.unprocessed_from, self.offset)
+                )
+                if len(cursor.fetchall()) > 1:
+                    self.offset += 1
+                    self.state.set_state(self.offset_state_name, self.offset)
+                else:
+                    self.offset = 0
+                    self.state.set_state(self.offset_state_name, self.offset)
+
+                    self.unprocessed_from = movie_updated_at
+                    self.state.set_state(self.unprocessed_from_name, str(self.unprocessed_from))
+
+                return movie_id
