@@ -3,7 +3,7 @@ import psycopg2
 from loguru import logger
 from psycopg2.extras import DictCursor
 
-from checkers import GenreChecker, MovieChecker, PersonChecker
+from checkers import Checker
 from loader import config
 from processes import MovieProcess
 from state import JsonFileStorage, State
@@ -44,9 +44,7 @@ if __name__ == '__main__':
     storage = JsonFileStorage('state.json')
     state = State(storage)
     checkers = (
-        GenreChecker(state),
-        PersonChecker(state),
-        MovieChecker(state),
+        Checker(state),
     )
     processor = Processor(checkers, MovieProcess())
     processor.start()
