@@ -67,7 +67,7 @@ LEFT JOIN content.persons_movies pm ON pm.movie_id = m.id
 LEFT JOIN content.persons p ON p.id = pm.person_id
 LEFT JOIN content.genres_movies gm ON gm.movie_id = m.id
 LEFT JOIN content.genres g ON g.id = gm.genre_id
-WHERE m.id IN (%s);""", (movie_id,))
+WHERE m.id IN (%s);""", (movie_id, ))
             return cursor.fetchall()
 
     def transform(self, extracted_data: tuple) -> List[dict]:
