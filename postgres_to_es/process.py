@@ -1,11 +1,11 @@
 import json
 from typing import List
 
-import psycopg2
-from psycopg2.extras import DictCursor
 import backoff
+import psycopg2
 import requests
 from loguru import logger
+from psycopg2.extras import DictCursor
 
 from config import config
 
