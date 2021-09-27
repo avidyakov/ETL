@@ -5,7 +5,7 @@ import backoff
 import requests
 from loguru import logger
 
-from errors import TransformError
+from loader import config
 
 
 def on_backoff(details: dict) -> None:
@@ -21,7 +21,8 @@ class BaseProcess:
     def load(self, transformed_data) -> None:
         data = '\n'.join([json.dumps(item) for item in transformed_data]) + '\n'
         headers = {'Content-Type': 'application/x-ndjson'}
-        requests.post('http://0.0.0.0:9200/_bulk', data=data, headers=headers)
+        elastic_url = config.elastic.url()
+        requests.post(f'{elastic_url}/_bulk', data=data, headers=headers)
 
 
 class MovieProcess(BaseProcess):
@@ -29,70 +30,66 @@ class MovieProcess(BaseProcess):
     def extract(self, pg_conn, movie_id):
         with pg_conn.cursor() as cursor:
             cursor.execute("""SELECT
-    movie.id,
-    movie.title,
-    movie.plot,
-    movie.imdb_rating
-FROM content.movies movie
-WHERE movie.id IN (%s);""", (movie_id, ))
-            movie = cursor.fetchone()
-
-            cursor.execute("""SELECT
-    genre.id,
-    genre.name
-FROM content.movies movie
-LEFT JOIN content.genres_movies gm ON gm.movie_id = movie.id
-LEFT JOIN content.genres genre ON genre.id = gm.genre_id
-WHERE movie.id IN (%s);""", (movie_id, ))
-            genres = cursor.fetchall()
-
-            cursor.execute("""SELECT
-    person.id,
-    person.name,
-    pm.part
-FROM content.movies movie
-LEFT JOIN content.persons_movies pm ON pm.movie_id = movie.id
-LEFT JOIN content.persons person ON person.id = pm.person_id
-WHERE movie.id IN (%s);""", (movie_id, ))
-            persons = cursor.fetchall()
-
-            return movie, genres, persons
+    m.id as movie_id,
+    m.title,
+    m.plot,
+    m.imdb_rating,
+    pm.part,
+    p.id as person_id,
+    p.name as person_name,
+    g.id as genre_id,
+    g.name as genre_name
+FROM content.movies m
+LEFT JOIN content.persons_movies pm ON pm.movie_id = m.id
+LEFT JOIN content.persons p ON p.id = pm.person_id
+LEFT JOIN content.genres_movies gm ON gm.movie_id = m.id
+LEFT JOIN content.genres g ON g.id = gm.genre_id
+WHERE m.id IN (%s);""", (movie_id, ))
+            return cursor.fetchall()
 
     def transform(self, extracted_data: tuple) -> List[dict]:
-        movie, genres, persons = extracted_data
-
-        actors, writers = [], []
-        actors_names, writers_names = '', ''
+        movie_id = ''
+        movie_title = ''
+        movie_description = ''
+        movie_imdb_rating = ''
+        genres = set()
         director = ''
-        for person in persons:
-            role = person['part']
-            if role is None:
-                break
+        actors = set()
+        writers = set()
 
+        for row in extracted_data:
+            if not movie_id and row['movie_id']:
+                movie_id = row['movie_id']
+
+            if not movie_title and row['title']:
+                movie_title = row['title']
+
+            if not movie_description and row['plot']:
+                movie_description = row['plot']
+
+            if not movie_imdb_rating and row['imdb_rating']:
+                movie_imdb_rating = row['imdb_rating']
+
+            genre = row['genre_name']
+            if genre not in genres:
+                genres.add(genre)
+
+            role = row['part']
             if role == 'a':
-                actors.append({'id': person['id'], 'name': person['name']})
-                actors_names += person['name']
+                actors.add((row['person_id'], row['person_name']))
             elif role == 'w':
-                writers.append({'id': person['id'], 'name': person['name']})
-                writers_names += person['name']
+                writers.add((row['person_id'], row['person_name']))
             elif role == 'd':
-                director = person['name']
-            else:
-                raise TransformError
+                director = row['person_name']
 
-        genre = ''
-        for item in genres:
-            genre += item['name']
-
-        result = [{'index': {'_index': 'movies', '_id': movie['id']}}, {
-            'title': movie['title'],
-            'imdb_rating': movie['imdb_rating'],
-            'description': movie['plot'],
-            'genre': genre,
+        return [{'index': {'_index': 'movies', '_id': movie_id}}, {
+            'title': movie_title,
+            'imdb_rating': movie_imdb_rating,
+            'description': movie_description,
+            'genre': ' '.join(genres),
             'director': director,
-            'actors_names': actors_names,
-            'writers_names': writers_names,
-            'actors': actors,
-            'writers': writers
+            'actors_names': ' '.join([name for _, name in actors]),
+            'writers_names': ' '.join([name for _, name in writers]),
+            'actors': [{'id': actor_id, 'name': actor_name} for actor_id, actor_name in actors],
+            'writers': [{'id': writer_id, 'name': writer_name} for writer_id, writer_name in writers]
         }]
-        return result

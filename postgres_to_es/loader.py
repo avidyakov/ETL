@@ -14,6 +14,9 @@ class Elastic(BaseModel):
     host: str
     port: int
 
+    def url(self):
+        return f'http://{self.host}:{self.port}'
+
 
 class Config(BaseModel):
     database: Database

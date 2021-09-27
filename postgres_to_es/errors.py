@@ -1,2 +1,0 @@
-class TransformError(Exception):
-    pass
