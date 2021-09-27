@@ -1,18 +1,25 @@
 import json
 from typing import List
 
+import psycopg2
+from psycopg2.extras import DictCursor
 import backoff
 import requests
 from loguru import logger
 
-from loader import config
+from config import config
 
 
 def on_backoff(details: dict) -> None:
     logger.error(f'Backing off {details["wait"]:0.1f} seconds after {details["tries"]} tries')
 
 
-class BaseProcess:
+class Process:
+
+    def __init__(self, checkers):
+        self.checkers = checkers
+        self._recently_updated = set()
+
     @backoff.on_exception(
         backoff.expo,
         requests.exceptions.ConnectionError,
@@ -24,8 +31,24 @@ class BaseProcess:
         elastic_url = config.elastic.url()
         requests.post(f'{elastic_url}/_bulk', data=data, headers=headers)
 
+    @backoff.on_exception(backoff.expo, (
+            psycopg2.OperationalError,
+            psycopg2.errors.AdminShutdown,
+            psycopg2.InterfaceError
+    ), on_backoff=on_backoff)
+    def start(self):
+        logger.info('The process is running')
+        with psycopg2.connect(**config.database.dict(), cursor_factory=DictCursor) as pg_conn:
+            for checker in self.checkers:
+                for movie_id in checker.get_updated_objects(pg_conn):
+                    if movie_id not in self._recently_updated:
+                        extracted = self.extract(pg_conn, movie_id)
+                        transformed = self.transform(extracted)
+                        self.load(transformed)
+                        self._recently_updated.add(movie_id)
 
-class MovieProcess(BaseProcess):
+        pg_conn.close()
+        logger.info('The process is stopped')
 
     def extract(self, pg_conn, movie_id):
         with pg_conn.cursor() as cursor:
@@ -44,7 +67,7 @@ LEFT JOIN content.persons_movies pm ON pm.movie_id = m.id
 LEFT JOIN content.persons p ON p.id = pm.person_id
 LEFT JOIN content.genres_movies gm ON gm.movie_id = m.id
 LEFT JOIN content.genres g ON g.id = gm.genre_id
-WHERE m.id IN (%s);""", (movie_id, ))
+WHERE m.id IN (%s);""", (movie_id,))
             return cursor.fetchall()
 
     def transform(self, extracted_data: tuple) -> List[dict]:
