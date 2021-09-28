@@ -42,6 +42,11 @@ class Process:
             for checker in self.checkers:
                 for movie_id in checker.get_updated_objects(pg_conn):
                     if movie_id not in self._recently_updated:
+                        # Если мы сохраним сначала все фильмы в лист, то мы провалимся в памяти, если их будет
+                        # достаточно много. Я уже не говорю про то, что дальше нам потребуется в разы больше памяти
+                        # для того, чтобы обработать наш огромный лист с этими фильмами.
+                        # Дальше если мы запросим все обновленные фильмы из базы, то мы убьем нашу базу.
+                        # Это говорилось в уроках.
                         extracted = self.extract(pg_conn, movie_id)
                         transformed = self.transform(extracted)
                         self.load(transformed)
